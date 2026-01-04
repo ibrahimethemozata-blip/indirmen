@@ -1,0 +1,292 @@
+-- =========================
+-- Window Sistemi
+-- =========================
+Window = {}
+Window.__index = Window
+
+function Window:new(title, x, y, w, h, app)
+    local win = {
+        title = title,
+        x = x,
+        y = y,
+        w = w,
+        h = h,
+        dragging = false,
+        offsetX = 0,
+        offsetY = 0,
+        app = app,
+        visible = true,
+        minimized = false
+    }
+    setmetatable(win, Window)
+    return win
+end
+
+function Window:draw()
+    if not self.visible then return end
+    -- minimized ise sadece görev çubuğunda göster
+    if self.minimized then return end
+
+    -- pencere arka planı
+    love.graphics.setColor(0.8,0.8,0.8)
+    love.graphics.rectangle("fill", self.x, self.y, self.w, self.h)
+    -- başlık çubuğu
+    love.graphics.setColor(0.1,0.1,0.6)
+    love.graphics.rectangle("fill", self.x, self.y, self.w, 20)
+    love.graphics.setColor(1,1,1)
+    love.graphics.print(self.title, self.x+5, self.y+2)
+    -- butonlar: [X][_][⬜]
+    love.graphics.setColor(1,0,0)
+    love.graphics.rectangle("fill", self.x+self.w-20, self.y, 20, 20)
+    love.graphics.setColor(1,1,1)
+    love.graphics.print("X", self.x+self.w-15, self.y+2)
+    -- minimize _
+    love.graphics.setColor(1,1,0)
+    love.graphics.rectangle("fill", self.x+self.w-40, self.y, 20, 20)
+    love.graphics.setColor(0,0,0)
+    love.graphics.print("_", self.x+self.w-35, self.y+2)
+    -- maximize ⬜
+    love.graphics.setColor(0,1,0)
+    love.graphics.rectangle("fill", self.x+self.w-60, self.y, 20, 20)
+    love.graphics.setColor(0,0,0)
+    love.graphics.print("⬜", self.x+self.w-57, self.y+2)
+
+    -- uygulama içeriği
+    if self.app and self.app.draw then
+        self.app:draw(self.x, self.y, self.w, self.h)
+    end
+end
+
+function Window:update(dt)
+    if not self.visible or self.minimized then return end
+    if self.dragging then
+        local mx, my = love.mouse.getPosition()
+        self.x = mx - self.offsetX
+        self.y = my - self.offsetY
+    end
+    if self.app and self.app.update then
+        self.app:update(dt)
+    end
+end
+
+function Window:mousepressed(mx, my, button)
+    if not self.visible then return end
+    if button == 1 then
+        -- başlık çubuğu
+        if mx >= self.x and mx <= self.x+self.w and my >= self.y and my <= self.y+20 then
+            -- kapatma butonu
+            if mx >= self.x+self.w-20 then
+                self.visible = false
+                return
+            end
+            -- minimize
+            if mx >= self.x+self.w-40 and mx <= self.x+self.w-20 then
+                self.minimized = true
+                return
+            end
+            -- maximize
+            if mx >= self.x+self.w-60 and mx <= self.x+self.w-40 then
+                if self.w ~= 800 or self.h ~= 580 then
+                    self.x, self.y, self.w, self.h = 0, 0, 800, 580
+                else
+                    self.x, self.y, self.w, self.h = 200, 100, 300, 200
+                end
+                return
+            end
+
+            self.dragging = true
+            self.offsetX = mx - self.x
+            self.offsetY = my - self.y
+        end
+    end
+    if self.app and self.app.mousepressed then
+        self.app:mousepressed(mx-self.x, my-self.y, button)
+    end
+end
+
+function Window:mousereleased(mx, my, button)
+    self.dragging = false
+    if self.app and self.app.mousereleased then
+        self.app:mousereleased(mx-self.x, my-self.y, button)
+    end
+end
+
+-- =========================
+-- Notepad
+-- =========================
+Notepad = {}
+Notepad.__index = Notepad
+
+function Notepad:new()
+    local n = {text=""}
+    setmetatable(n, Notepad)
+    return n
+end
+
+function Notepad:draw(x,y,w,h)
+    love.graphics.setColor(1,1,1)
+    love.graphics.rectangle("line", x+5, y+25, w-10, h-30)
+    love.graphics.print(self.text, x+10, y+30)
+end
+
+function Notepad:keypressed(key)
+    if key=="backspace" then self.text=self.text:sub(1,-2) end
+end
+
+function Notepad:textinput(t)
+    self.text=self.text..t
+end
+
+-- =========================
+-- Calculator
+-- =========================
+Calculator = {}
+Calculator.__index = Calculator
+
+function Calculator:new()
+    local c={input="", result=""}
+    setmetatable(c, Calculator)
+    return c
+end
+
+function Calculator:draw(x,y,w,h)
+    love.graphics.setColor(1,1,1)
+    love.graphics.rectangle("line", x+5, y+25, w-10, 50)
+    love.graphics.print(self.input, x+10, y+30)
+    love.graphics.print(self.result, x+10, y+60)
+end
+
+function Calculator:keypressed(key)
+    if key=="return" then
+        local success,res=pcall(function() return load("return "..self.input)() end)
+        if success and res then self.result=tostring(res) else self.result="Error" end
+        self.input=""
+    elseif key=="backspace" then
+        self.input=self.input:sub(1,-2)
+    end
+end
+
+function Calculator:textinput(t)
+    if t:match("[0-9%+%-%*/%.]") then self.input=self.input..t end
+end
+
+-- =========================
+-- Masaüstü ikonları
+-- =========================
+icons={
+    {x=50,y=50,name="Notepad", app=Notepad},
+    {x=50,y=150,name="Calculator", app=Calculator}
+}
+
+-- =========================
+-- Başlat Menüsü
+-- =========================
+startMenuVisible = false
+
+function toggleStartMenu()
+    startMenuVisible = not startMenuVisible
+end
+
+-- =========================
+-- Ana LOVE2D Fonksiyonları
+-- =========================
+windows = {}
+
+function love.load()
+    love.window.setTitle("MyOS Simulator")
+    love.window.setMode(800,600)
+    bgColor={0.2,0.2,0.2}
+end
+
+function love.update(dt)
+    for _,win in ipairs(windows) do
+        win:update(dt)
+    end
+end
+
+function love.draw()
+    love.graphics.clear(bgColor)
+
+    -- ikonları çiz
+    for _,icon in ipairs(icons) do
+        love.graphics.setColor(1,1,1)
+        love.graphics.rectangle("line", icon.x, icon.y, 64,64)
+        love.graphics.print(icon.name, icon.x, icon.y+70)
+    end
+
+    -- pencereleri çiz
+    for _,win in ipairs(windows) do
+        win:draw()
+    end
+
+    -- görev çubuğu
+    love.graphics.setColor(0.1,0.1,0.1)
+    love.graphics.rectangle("fill",0,580,800,20)
+    -- Başlat butonu
+    love.graphics.setColor(0,0,1)
+    love.graphics.rectangle("fill",0,580,80,20)
+    love.graphics.setColor(1,1,1)
+    love.graphics.print("Start",5,582)
+
+    -- Başlat menüsü
+    if startMenuVisible then
+        love.graphics.setColor(0.2,0.2,0.2)
+        love.graphics.rectangle("fill",0,500,200,80)
+        love.graphics.setColor(1,1,1)
+        love.graphics.print("Notepad",10,510)
+        love.graphics.print("Calculator",10,530)
+    end
+end
+
+function love.mousepressed(x,y,button)
+    -- Başlat butonu
+    if x>=0 and x<=80 and y>=580 and y<=600 and button==1 then
+        toggleStartMenu()
+        return
+    end
+
+    -- Başlat menüsü tıklaması
+    if startMenuVisible and x>=0 and x<=200 and y>=500 and y<=580 then
+        if y<=520 then
+            table.insert(windows, Window:new("Notepad",200,100,300,200, Notepad:new()))
+        else
+            table.insert(windows, Window:new("Calculator",200,100,300,200, Calculator:new()))
+        end
+        startMenuVisible=false
+        return
+    end
+
+    -- Masaüstü ikon tıklaması
+    for _,icon in ipairs(icons) do
+        if x>=icon.x and x<=icon.x+64 and y>=icon.y and y<=icon.y+64 then
+            table.insert(windows, Window:new(icon.name,200,100,300,200, icon.app:new()))
+        end
+    end
+
+    -- Pencerelere tıklama
+    for _,win in ipairs(windows) do
+        win:mousepressed(x,y,button)
+    end
+end
+
+function love.mousereleased(x,y,button)
+    for _,win in ipairs(windows) do
+        win:mousereleased(x,y,button)
+    end
+end
+
+function love.keypressed(key)
+    for _,win in ipairs(windows) do
+        if win.visible and not win.minimized and win.app and win.app.keypressed then
+            win.app:keypressed(key)
+        end
+    end
+end
+
+function love.textinput(t)
+    for _,win in ipairs(windows) do
+        if win.visible and not win.minimized and win.app and win.app.textinput then
+            win.app:textinput(t)
+        end
+    end
+end
